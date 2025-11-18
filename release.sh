@@ -21,21 +21,33 @@ if [ -z "$VERSION" ]; then
     exit 1
 fi
 
+# Convert to absolute path before changing directory
+SOURCE_DIR=$(cd "$SOURCE_DIR" && pwd)
+
 cd "$SVN_DIR"
 
 echo "→ Updating SVN..."
 svn update
 
+# Check if tag already exists
+if svn info "tags/$VERSION" >/dev/null 2>&1; then
+    echo "Error: Tag $VERSION already exists!"
+    exit 1
+fi
+
 echo "→ Copying files to trunk..."
-cp -r "$SOURCE_DIR"/* trunk/
+rsync -av --delete "$SOURCE_DIR/" trunk/
 
 echo "→ Adding new files..."
-svn add trunk/* --force
+svn status trunk | grep '^?' | awk '{print $2}' | xargs -r svn add
+
+echo "→ Removing deleted files..."
+svn status trunk | grep '^!' | awk '{print $2}' | xargs -r svn rm
 
 echo "→ Creating tag..."
-svn cp trunk tags/$VERSION
+svn cp trunk "tags/$VERSION"
 
 echo "→ Committing..."
-svn ci -m "Releases version $VERSION"
+svn ci -m "Release version $VERSION"
 
 echo "✓ Done! Released version $VERSION"
